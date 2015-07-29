@@ -10,8 +10,11 @@ function ImageSplit() {
   self.split = split;
 
   // private variables
-  var inputDir = '/Data/Projects/faces/download/annochecked';
-  var outputFile = '/Data/Projects/faces/download/split_<SET>.txt';
+  var inputDir = '/data/ken/datasets/msra-cfw/annochecked_nospaces';
+  var outputFile = '/data/ken/datasets/msra-cfw/spliti_<SET>.txt';
+  var outputClasses = '/data/ken/datasets/msra-cfw/classes.txt';//'';
+  var relativePaths = false;
+  var delim = ' ';
 
   ////////
 
@@ -19,10 +22,15 @@ function ImageSplit() {
 
     var outputStreamTrain = fs.createWriteStream(outputFile.replace('<SET>', 'train'));
     var outputStreamTest = fs.createWriteStream(outputFile.replace('<SET>', 'test'));
+    if (outputClasses) {
+      var outputStreamClasses = fs.createWriteStream(outputClasses);
+    }
 
     var files = fs.readdirSync(inputDir);
     console.log('Scanning files from: ' + inputDir);
     console.log(files.length + ' items to process');
+
+    var classId = -1;
 
     var promise = files.reduce(function(promise, file) {
       return promise.then(function() {
@@ -35,7 +43,9 @@ function ImageSplit() {
         if (stat && stat.isDirectory()) {
           console.log('Scanning ' + subpath + '...');
 
-          return splitSubdir_(subpath, subdir, outputStreamTrain, outputStreamTest);
+          classId += 1;
+          return splitSubdir_(subpath, subdir, outputStreamTrain, outputStreamTest,
+                              outputStreamClasses, classId, relativePaths, delim);
         } else {
           return Promise.resolve();
         }
@@ -52,7 +62,8 @@ function ImageSplit() {
 
   }
 
-  function splitSubdir_(subpath, subdir, outputStreamTrain, outputStreamTest) {
+  function splitSubdir_(subpath, subdir, outputStreamTrain, outputStreamTest,
+                        outputStreamClasses, classId, relativePaths, delim) {
 
     var train_prop = 0.9;
     var test_prop = 0.1;
@@ -62,7 +73,8 @@ function ImageSplit() {
         if (err) return reject(err);
 
         files = files.filter(function(x) {
-          return (x.substring(x.length-4) == '.jpg');
+          return ((x.substring(x.length-4) == '.jpg') &&
+                  (x.substring(0, 1) != '.'));
         });
 
         var count = files.length;
@@ -81,16 +93,27 @@ function ImageSplit() {
         var trainIdxs = randIdxs.slice(0, trainCount);
         var testIdxs = randIdxs.slice(trainCount);
 
+        var classLabel = subdir;
+        if (outputStreamClasses) {
+          if (classId == undefined) throw new Error('Must specify valid class ID');
+          classLabel = classId;
+        }
+
         trainIdxs.forEach(function(idx) {
-          var filepath = subpath + '/' + files[idx];
-          var line = filepath + '\t' + subdir + '\n';
+          var filepath = (relativePaths ? subdir : subpath) + '/' + files[idx];
+          var line = filepath + delim + classLabel + '\n';
           outputStreamTrain.write(line);
         });
         testIdxs.forEach(function(idx) {
-          var filepath = subpath + '/' + files[idx];
-          var line = filepath + '\t' + subdir + '\n';
+          var filepath = (relativePaths ? subdir : subpath) + '/' + files[idx];
+          var line = filepath + delim + classLabel + '\n';
           outputStreamTest.write(line);
         });
+
+        if (outputStreamClasses) {
+          var line = subdir + delim + classId + '\n';
+          outputStreamClasses.write(line);
+        }
 
         resolve();
       });

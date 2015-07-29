@@ -10,8 +10,8 @@ function ImageVerify() {
   self.verify = verify;
 
   // private variables
-  var inputDir = '/Data/Projects/faces/download/output';
-  var outputFile = '/Data/Projects/faces/download/verified.txt';
+  var inputDir = '/data/ken/datasets/msra-cfw/output';
+  var outputFile = '/data/ken/datasets/msra-cfw/verified.txt';
 
   ////////
 
@@ -55,39 +55,81 @@ function ImageVerify() {
       fs.readdir(subpath, function(err, files) {
         if (err) return reject(err);
 
-        var subpromises = files.map(function(file) {
+        var chained_promise = files.reduce(function(promise, file) {
+          return promise.then(function() {
 
-          var subpromise = new Promise(function(res, rej) {
-            var filepath = subpath + '/' + file;
-            fs.stat(filepath, function(err, stat) {
-              if (err) rej(err);
+            var subpromise = new Promise(function(res, rej) {
+              var filepath = subpath + '/' + file;
+              fs.stat(filepath, function(err, stat) {
+                if (err) rej(err);
 
-              if (stat.isFile()) {
-                verifyImage_(filepath)
-                .then(function() {
-                  console.log('Verified: ' + filepath);
-                  var line = filepath + '\t' + subdir + '\n';
-                  outputStream.write(line);
+                if (stat.isFile()) {
+                  verifyImage_(filepath)
+                    .then(function() {
+                      console.log('Verified: ' + filepath);
+                      var line = filepath + '\t' + subdir + '\n';
+                      outputStream.write(line);
+                      res();
+                    })
+                    .catch(function(err) {
+                      console.log('Error for: ' + filepath);
+                      console.log(err);
+                      res();
+                      //rej(err);
+                    });
+                } else {
                   res();
-                })
-                .catch(function(err) {
-                  console.log('Error for: ' + filepath);
-                  res();
-                  //rej(err);
-                });
-              } else {
-                res();
-              }
+                }
+              });
             });
+
+            return subpromise;
+
+          });
+        }, Promise.resolve());
+
+        chained_promise
+          .then(resolve)
+          .catch(function(err) {
+            console.log('goodbye!');
+            console.log(err.stack);
+            reject(err);
           });
 
-          return subpromise;
+        // var subpromises = files.map(function(file) {
 
-        });
+        //   var subpromise = new Promise(function(res, rej) {
+        //     var filepath = subpath + '/' + file;
+        //     fs.stat(filepath, function(err, stat) {
+        //       if (err) rej(err);
 
-        Promise.all(subpromises)
-        .then(resolve)
-        .catch(reject);
+        //       if (stat.isFile()) {
+        //         verifyImage_(filepath)
+        //         .then(function() {
+        //           console.log('Verified: ' + filepath);
+        //           var line = filepath + '\t' + subdir + '\n';
+        //           outputStream.write(line);
+        //           res();
+        //         })
+        //         .catch(function(err) {
+        //           console.log('Error for: ' + filepath);
+        //           console.log(err);
+        //           res();
+        //           //rej(err);
+        //         });
+        //       } else {
+        //         res();
+        //       }
+        //     });
+        //   });
+
+        //   return subpromise;
+
+        // });
+
+        // Promise.all(subpromises)
+        //   .then(resolve)
+        //   .catch(reject);
 
       });
     });
@@ -96,9 +138,14 @@ function ImageVerify() {
 
   function verifyImage_(path) {
     var promise = new Promise(function(resolve, reject) {
-      gm(path).identify(function(err, val) {
-        if (err) return reject(err);
-        resolve();
+      var readStream = fs.createReadStream(path);
+      gm(readStream, path).identify(function(err, val) {
+        readStream.close();
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
       });
     });
     return promise;
