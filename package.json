@@ -10,7 +10,8 @@
       "request": "^2.59.0",
       "graceful-fs": "^4.1.2",
       "linebyline": "^0.0.9",
-      "gm": "^1.9.0"
+      "gm": "^1.9.0",
+      "underscore": "^1.8.3"
   },
   "devDependencies": {
   }
